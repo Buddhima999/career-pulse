@@ -1,0 +1,30 @@
+#Environment variables
+.env
+.env.*
+
+#Intelij IDEA
+.idea/
+*.iml
+
+#Vscode
+.vscode/
+
+#Java and Maven
+backend/target/
+*.class
+
+#Node and React
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# n8n sensitive data
+automation/.n8n/
