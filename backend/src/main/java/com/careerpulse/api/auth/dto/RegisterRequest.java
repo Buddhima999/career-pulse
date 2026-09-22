@@ -1,5 +1,7 @@
 package com.careerpulse.api.auth.dto;
 
+import com.careerpulse.api.common.validation.NormalizedSize;
+import com.careerpulse.api.common.validation.Utf8ByteLength;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -11,6 +13,11 @@ public record RegisterRequest(
                 min = 2,
                 max = 100,
                 message = "Full name must contain between 2 and 100 characters"
+        )
+        @NormalizedSize(
+                min = 2,
+                max = 100,
+                message = "Full name must contain between 2 and 100 characters after normalization"
         )
         String fullName,
 
@@ -27,6 +34,10 @@ public record RegisterRequest(
                 min = 8,
                 max = 72,
                 message = "Password must contain between 8 and 72 characters"
+        )
+        @Utf8ByteLength(
+                max = 72,
+                message = "Password must not exceed 72 UTF-8 bytes"
         )
         String password
 
