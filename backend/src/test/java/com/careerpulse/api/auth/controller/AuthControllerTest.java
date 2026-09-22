@@ -1,5 +1,6 @@
 package com.careerpulse.api.auth.controller;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import com.careerpulse.api.auth.dto.RegisterRequest;
 import com.careerpulse.api.auth.dto.UserResponse;
 import com.careerpulse.api.auth.exception.EmailAlreadyRegisteredException;
@@ -74,6 +75,139 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenPasswordExceedsBcryptByteLimit()
+            throws Exception {
+
+        String oversizedPassword = "😊".repeat(19);
+
+        String requestBody = """
+            {
+              "fullName": "Buddhima Dishantha",
+              "email": "buddhima@example.com",
+              "password": "%s"
+            }
+            """.formatted(oversizedPassword);
+
+        mockMvc.perform(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(
+                        jsonPath("$.fieldErrors.password")
+                                .value(
+                                        "Password must not exceed 72 UTF-8 bytes"
+                                )
+                );
+
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenNormalizedFullNameIsTooShort()
+            throws Exception {
+
+        String requestBody = """
+            {
+              "fullName": "a ",
+              "email": "buddhima@example.com",
+              "password": "StrongPass123!"
+            }
+            """;
+
+        mockMvc.perform(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(
+                        jsonPath("$.fieldErrors.fullName")
+                                .value(
+                                        "Full name must contain between 2 and 100 characters after normalization"
+                                )
+                );
+
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void shouldReturnConflictWhenDatabaseRejectsDuplicate()
+            throws Exception {
+
+        when(userService.register(any(RegisterRequest.class)))
+                .thenThrow(
+                        new DataIntegrityViolationException(
+                                "Duplicate database value"
+                        )
+                );
+
+        String requestBody = """
+            {
+              "fullName": "Buddhima Dishantha",
+              "email": "buddhima@example.com",
+              "password": "StrongPass123!"
+            }
+            """;
+
+        mockMvc.perform(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Request conflicts with existing data"
+                                )
+                )
+                .andExpect(
+                        jsonPath("$.path")
+                                .value("/api/v1/auth/register")
+                )
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenJsonIsMalformed()
+            throws Exception {
+
+        String requestBody = """
+            {
+              "fullName": "Buddhima Dishantha"
+              "email": "buddhima@example.com",
+              "password": "StrongPass123!"
+            }
+            """;
+
+        mockMvc.perform(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Malformed JSON request")
+                )
+                .andExpect(
+                        jsonPath("$.path")
+                                .value("/api/v1/auth/register")
+                )
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        verifyNoInteractions(userService);
     }
 
     @Test
