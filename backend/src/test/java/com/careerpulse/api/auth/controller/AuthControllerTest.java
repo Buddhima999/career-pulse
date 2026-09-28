@@ -22,8 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -520,5 +519,37 @@ class AuthControllerTest {
                 );
 
         verifyNoInteractions(authService);
+    }
+
+    @Test
+    void shouldNormalizeLoginEmailBeforeCallingService()
+            throws Exception {
+
+        String requestBody = """
+        {
+          "email": "  BUDDHIMA@EXAMPLE.COM  ",
+          "password": "StrongPass123!"
+        }
+        """;
+
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody)
+                )
+                .andExpect(status().isOk());
+
+        verify(authService).login(
+                argThat(request ->
+                        "buddhima@example.com".equals(
+                                request.email()
+                        )
+                                && "StrongPass123!".equals(
+                                request.password()
+                        )
+                )
+        );
+
+        verifyNoInteractions(userService);
     }
 }
