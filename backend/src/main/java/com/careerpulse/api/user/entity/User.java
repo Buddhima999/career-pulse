@@ -115,4 +115,8 @@ public class User {
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
 }
