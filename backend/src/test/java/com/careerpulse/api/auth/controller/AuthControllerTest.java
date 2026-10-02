@@ -4,7 +4,10 @@ import com.careerpulse.api.auth.dto.LoginRequest;
 import com.careerpulse.api.auth.dto.LoginResponse;
 import com.careerpulse.api.auth.exception.AccountDisabledException;
 import com.careerpulse.api.auth.exception.InvalidCredentialsException;
+import com.careerpulse.api.auth.security.JwtAuthenticationFilter;
 import com.careerpulse.api.auth.service.AuthService;
+import com.careerpulse.api.auth.service.JwtService;
+import com.careerpulse.api.config.SecurityConfig;
 import org.springframework.dao.DataIntegrityViolationException;
 import com.careerpulse.api.auth.dto.RegisterRequest;
 import com.careerpulse.api.auth.dto.UserResponse;
@@ -20,15 +23,21 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import io.jsonwebtoken.Claims;
+import org.springframework.http.HttpHeaders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({
+        GlobalExceptionHandler.class,
+        SecurityConfig.class,
+        JwtAuthenticationFilter.class
+})
 class AuthControllerTest {
 
     @Autowired
@@ -39,6 +48,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private JwtService jwtService;
 
     @Test
     void shouldReturnCreatedWhenRegistrationIsValid()
@@ -551,5 +563,109 @@ class AuthControllerTest {
         );
 
         verifyNoInteractions(userService);
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenAccessTokenIsMissing()
+            throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/auth/me")
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(
+                        content().contentTypeCompatibleWith(
+                                MediaType.APPLICATION_JSON
+                        )
+                )
+                .andExpect(
+                        jsonPath("$.status").value(401)
+                )
+                .andExpect(
+                        jsonPath("$.error")
+                                .value("Unauthorized")
+                )
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Authentication is required")
+                )
+                .andExpect(
+                        jsonPath("$.path")
+                                .value("/api/v1/auth/me")
+                )
+                .andExpect(
+                        jsonPath("$.fieldErrors").isEmpty()
+                );
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenAccessTokenIsInvalid()
+            throws Exception {
+        when(jwtService.parseAccessToken("invalid-token"))
+                .thenThrow(
+                        new IllegalArgumentException(
+                                "Invalid token"
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/api/v1/auth/me")
+                                .header(
+                                        HttpHeaders.AUTHORIZATION,
+                                        "Bearer invalid-token"
+                                )
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(
+                        jsonPath("$.status").value(401)
+                )
+                .andExpect(
+                        jsonPath("$.error")
+                                .value("Unauthorized")
+                )
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Authentication is required")
+                )
+                .andExpect(
+                        jsonPath("$.path")
+                                .value("/api/v1/auth/me")
+                );
+    }
+
+    @Test
+    void shouldReturnCurrentUserWhenAccessTokenIsValid()
+            throws Exception {
+        Claims claims = mock(Claims.class);
+
+        when(jwtService.parseAccessToken("valid-token"))
+                .thenReturn(claims);
+
+        when(claims.getSubject())
+                .thenReturn("1");
+
+        when(claims.get("email", String.class))
+                .thenReturn("buddhima@example.com");
+
+        when(claims.get("role", String.class))
+                .thenReturn(UserRole.USER.name());
+
+        mockMvc.perform(
+                        get("/api/v1/auth/me")
+                                .header(
+                                        HttpHeaders.AUTHORIZATION,
+                                        "Bearer valid-token"
+                                )
+                )
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.id").value(1)
+                )
+                .andExpect(
+                        jsonPath("$.email")
+                                .value("buddhima@example.com")
+                )
+                .andExpect(
+                        jsonPath("$.role").value("USER")
+                );
     }
 }

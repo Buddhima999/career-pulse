@@ -2,6 +2,7 @@ package com.careerpulse.api.auth.service;
 
 import com.careerpulse.api.config.JwtProperties;
 import com.careerpulse.api.user.entity.User;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +42,15 @@ public class JwtService {
                 .expiration(Date.from(expiresAt))
                 .signWith(signingKey)
                 .compact();
+    }
+
+    public Claims parseAccessToken(String token) {
+        return Jwts.parser()
+                .verifyWith(signingKey)
+                .requireIssuer(ISSUER)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public long getExpirationSeconds() {
